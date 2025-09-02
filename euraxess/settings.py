@@ -15,8 +15,12 @@ NEWSPIDER_MODULE = "euraxess.spiders"
 ADDONS = {}
 
 
-# Crawl responsibly by identifying yourself (and your website) on the user-agent
-USER_AGENT = ''
+FAKEUSERAGENT_PROVIDERS = [
+    "scrapy_fake_useragent.providers.FakeUserAgentProvider",  # this is the first provider we'll try
+    "scrapy_fake_useragent.providers.FakerProvider",  # if FakeUserAgentProvider fails, we'll use faker to generate a user-agent string for us
+    "scrapy_fake_useragent.providers.FixedUserAgentProvider",  # fall back to USER_AGENT value
+]
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 Edg/138.0.0.0"
 
 # Obey robots.txt rules
 ROBOTSTXT_OBEY = False
@@ -52,9 +56,13 @@ ROBOTSTXT_OBEY = False
 
 # Enable or disable downloader middlewares
 # See https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
-DOWNLOADER_MIDDLEWARES = {
-    "euraxess.middlewares.RandomUserAgentMiddleware": 400,
-}
+# DOWNLOADER_MIDDLEWARES = {
+#     "scrapy.contrib.downloadermiddleware.useragent.UserAgentMiddleware": None,
+#     "scrapy.contrib.downloadermiddleware.retry.RetryMiddleware": None,
+#     "scrapy_fake_useragent.middleware.RandomUserAgentMiddleware": 400,
+#     "scrapy_fake_useragent.middleware.RetryUserAgentMiddleware": 401,
+# }
+
 
 # Enable or disable extensions
 # See https://docs.scrapy.org/en/latest/topics/extensions.html
@@ -64,9 +72,9 @@ DOWNLOADER_MIDDLEWARES = {
 
 # Configure item pipelines
 # See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
-# ITEM_PIPELINES = {
-#    "euraxess.pipelines.EuraxessPipeline": 300,
-# }
+ITEM_PIPELINES = {
+    "euraxess.pipelines.EuraxessPipeline": 300,
+}
 
 # Enable and configure the AutoThrottle extension (disabled by default)
 # See https://docs.scrapy.org/en/latest/topics/autothrottle.html
