@@ -12,7 +12,7 @@ developmentMode = false
 [server]
 maxUploadSize = 200
 maxMessageSize = 200
-enableCORS = false
+enableCORS = true
 enableXsrfProtection = true
 
 fileWatcherType = "auto"
@@ -25,12 +25,8 @@ serverAddress = "localhost"
 
 [runner]
 magicEnabled = true
-installTracer = false
-fixMatplotlib = true
 
 fastReruns = true
 
 [client]
-caching = true
-displayEnabled = true
 showErrorDetails = true
