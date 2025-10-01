@@ -21,7 +21,7 @@ class EuraxessScraper(scrapy.Spider):
     try:
         df = pd.read_csv("output/jobs.csv")
         df["posted_on"] = pd.to_datetime(df["posted_on"], errors="coerce")
-        last_date = df["posted_on"].max() - datetime.timedelta(days=15)
+        last_date = df["posted_on"].max() - datetime.timedelta(days=1)
     except FileNotFoundError:
         last_date = None
 
