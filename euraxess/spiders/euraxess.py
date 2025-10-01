@@ -21,8 +21,7 @@ class EuraxessScraper(scrapy.Spider):
     try:
         df = pd.read_csv("output/jobs.csv")
         df["posted_on"] = pd.to_datetime(df["posted_on"], errors="coerce")
-        last_date = df["posted_on"].max() - datetime.timedelta(days=1)
-        print(f"Last date in existing data: {last_date}")
+        last_date = df["posted_on"].max() - datetime.timedelta(days=15)
     except FileNotFoundError:
         last_date = None
 
@@ -39,14 +38,14 @@ class EuraxessScraper(scrapy.Spider):
         if response.status != 200:
             raise CloseSpider(f"Failed to fetch the page: {response.url}")
         else:
-            print(f"Successfully fetched the page: {response.url}")
+            self.logger.info(f"Successfully fetched the page: {response.url}")
 
         # This is the xpath for final number
         if self.current_page == 0:
             self.final_number = response.xpath('//*[@id="oe-list-container"]/div[3]/div/nav/ul/li[5]/a/text()').get()
             self.final_number = int(self.final_number.strip()) if self.final_number else 0
 
-            print(f"Final number: {self.final_number}")
+            self.logger.info(f"Final number of pages to scrape: {self.final_number}")
 
         def _clean_line_breaks(text: str) -> str:
             """Utility function to clean line breaks from text."""
@@ -54,7 +53,7 @@ class EuraxessScraper(scrapy.Spider):
 
         # Extracting the job listings from the current page
         job_list = response.xpath('//*[@id="oe-list-container"]/div[3]/div/ul/li')
-        print(f"Number of jobs found on this page: {len(job_list)}")
+        self.logger.info(f"Number of jobs found on this page: {len(job_list)}")
         for job in job_list:
             job_data = {
                 "id": response.urljoin(job.xpath(".//h3/a/@href").get()).split("/")[-1],
@@ -83,7 +82,7 @@ class EuraxessScraper(scrapy.Spider):
 
         next_url = f"{self.base_url}/jobs/search?page={self.current_page}"
         if self.current_page > self.final_number:
-            print(f"Reached the final page: {self.current_page}")
+            self.logger.info(f"Reached the final page: {self.current_page}")
             raise CloseSpider(f"Reached the final page: {self.current_page}")
 
         yield scrapy.Request(

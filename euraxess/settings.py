@@ -9,6 +9,7 @@
 
 BOT_NAME = "euraxess"
 
+LOG_LEVEL = "INFO"
 SPIDER_MODULES = ["euraxess.spiders"]
 NEWSPIDER_MODULE = "euraxess.spiders"
 

@@ -1,0 +1,52 @@
+version: "3.8"
+
+services:
+  euraxess-app:
+    build: .
+    container_name: euraxess-app
+    ports:
+      - "8501:8501"
+    volumes:
+      # Mount output directory to persist scraped data
+      - ./output:/app/output
+    networks:
+      - euraxess-network
+    environment:
+      - TZ=UTC
+    command: ["full"] # 运行定时任务 + Streamlit
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # 备用服务 - 仅运行爬虫一次
+  euraxess-scraper-once:
+    build: .
+    container_name: euraxess-scraper-once
+    volumes:
+      - ./output:/app/output
+    networks:
+      - euraxess-network
+    command: ["scrape"]
+    restart: "no"
+    profiles: ["manual"] # 仅在手动指定时运行
+
+networks:
+  euraxess-network:
+    driver: bridge
+# 使用说明:
+# 启动完整服务 (推荐): docker-compose up -d
+# 仅手动爬取一次: docker-compose --profile manual up euraxess-scraper-once
+# 查看日志: docker-compose logs -f
+# 停止服务: docker-compose down
+#
+# 功能说明:
+# - 自动定时爬取: 每天 UTC 18:00 (世界时间下午6点)
+# - 实时Web界面: http://localhost:8501
+# - 数据持久化: ./output/ 目录
+#
+# 单个Docker命令:
+# docker run -d -p 8501:8501 -v "${PWD}/output:/app/output" --name euraxess euraxess-scraper

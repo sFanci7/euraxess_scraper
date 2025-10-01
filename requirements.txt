@@ -1,0 +1,13 @@
+# Web scraping dependencies
+scrapy>=2.11.0
+scrapy-fake-useragent>=1.4.4
+
+# Data processing dependencies
+pandas>=2.0.0
+python-dateutil>=2.8.0
+
+# Web app dependencies
+streamlit>=1.28.0
+
+# Additional utilities
+requests>=2.31.0

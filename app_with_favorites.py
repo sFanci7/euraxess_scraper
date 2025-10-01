@@ -1,11 +1,58 @@
+import json
+import os
+from typing import Set
+
 import pandas as pd
 import streamlit as st
 from dateutil import parser
 
 # Configure Streamlit page - must be first Streamlit command
 st.set_page_config(
-    page_title="Euraxess Data", layout="wide", initial_sidebar_state="expanded", menu_items={"About": "Euraxess Job Listings Dashboard"}
+    page_title="Euraxess Data",
+    layout="wide",
+    initial_sidebar_state="expanded",
+    menu_items={"About": "Euraxess Job Listings Dashboard with Favorites"},
 )
+
+# 收藏功能相关的函数
+FAVORITES_FILE = "favorites.json"
+
+
+@st.cache_data
+def load_favorites() -> Set[str]:
+    """Load the list of favorite job IDs"""
+    try:
+        if os.path.exists(FAVORITES_FILE):
+            with open(FAVORITES_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return set(data.get("favorites", []))
+    except Exception:
+        pass
+    return set()
+
+
+def save_favorites(favorites: Set[str]) -> None:
+    """Save the list of favorite job IDs"""
+    try:
+        data = {"favorites": list(favorites)}
+        with open(FAVORITES_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        # Clear cache to ensure data updates
+        load_favorites.clear()
+    except Exception as e:
+        st.error(f"Failed to save favorites: {str(e)}")
+
+
+def toggle_favorite(job_id: str) -> None:
+    """Toggle favorite status"""
+    favorites = load_favorites()
+    if job_id in favorites:
+        favorites.remove(job_id)
+        st.success(f"Removed job {job_id} from favorites")
+    else:
+        favorites.add(job_id)
+        st.success(f"Added job {job_id} to favorites")
+    save_favorites(favorites)
 
 
 @st.cache_data(ttl=3600)  # Cache for 1 hour
@@ -119,9 +166,14 @@ def prepare_filter_options(df):
 
 
 @st.cache_data
-def filter_dataframe(df, selected_countries, selected_profiles, selected_fields, selected_sub_fields):
+def filter_dataframe(df, selected_countries, selected_profiles, selected_fields, selected_sub_fields, show_favorites_only=False):
     """Filter dataframe with caching."""
     df_filtered = df.copy()
+
+    # Favorites filtering
+    if show_favorites_only:
+        favorites = load_favorites()
+        df_filtered = df_filtered[df_filtered["id"].astype(str).isin(favorites)]
 
     if selected_countries:
         df_filtered = df_filtered[df_filtered["country"].isin(selected_countries)]
@@ -138,6 +190,97 @@ def filter_dataframe(df, selected_countries, selected_profiles, selected_fields,
     return df_filtered
 
 
+def create_favorite_button(job_id: str, favorites: Set[str]) -> None:
+    """Create favorite button"""
+    is_favorited = str(job_id) in favorites
+
+    if is_favorited:
+        button_text = "💖 Favorited"
+        button_type = "secondary"
+    else:
+        button_text = "🤍 Favorite"
+        button_type = "primary"
+
+    if st.button(button_text, key=f"fav_{job_id}", type=button_type, use_container_width=True):
+        toggle_favorite(str(job_id))
+        st.rerun()
+
+
+def display_job_table_with_favorites(df_filtered: pd.DataFrame) -> None:
+    """Display job table with favorites functionality"""
+    favorites = load_favorites()
+
+    # Prepare display columns
+    show_columns = [
+        "country",
+        "university",
+        "title",
+        "link",
+        "application_deadline",
+        "posted_on",
+        "description",
+        "department",
+        "location",
+        "funding_program",
+        "type",
+        "profile",
+        "field_1",
+    ]
+
+    # Add favorite status column
+    df_display = df_filtered[show_columns].copy()
+    df_display["is_favorite"] = df_filtered["id"].astype(str).isin(favorites)
+
+    # Reorder columns with favorite status first
+    columns_reordered = ["is_favorite"] + show_columns
+
+    # Column configuration
+    column_config = {
+        "is_favorite": st.column_config.CheckboxColumn("Favorite", help="Whether this job is favorited", default=False, width="small"),
+        "country": st.column_config.TextColumn("Country", width="small"),
+        "title": st.column_config.TextColumn("Title", width="medium"),
+        "university": st.column_config.TextColumn("University", width="medium"),
+        "link": st.column_config.LinkColumn("Link", display_text="View Details"),
+        "application_deadline": st.column_config.DateColumn("Deadline"),
+        "posted_on": st.column_config.DateColumn("Posted"),
+        "description": st.column_config.TextColumn("Description", width="large"),
+    }
+
+    # Display data table
+    edited_df = st.data_editor(
+        df_display[columns_reordered],
+        use_container_width=True,
+        height=500,
+        column_config=column_config,
+        hide_index=True,
+        disabled=show_columns,  # Only allow editing favorite status
+        key="job_table",
+    )
+
+    # Check for favorite status changes
+    if edited_df is not None:
+        # Compare original and edited favorite status
+        original_favorites = df_display["is_favorite"]
+        new_favorites = edited_df["is_favorite"]
+
+        changed_indices = original_favorites != new_favorites
+        if changed_indices.any():
+            # Update favorite status
+            current_favorites = load_favorites()
+
+            for idx in df_filtered.index[changed_indices]:
+                job_id = str(df_filtered.loc[idx, "id"])
+                new_status = new_favorites[changed_indices].iloc[0] if changed_indices.sum() == 1 else new_favorites.loc[idx]
+
+                if new_status and job_id not in current_favorites:
+                    current_favorites.add(job_id)
+                elif not new_status and job_id in current_favorites:
+                    current_favorites.remove(job_id)
+
+            save_favorites(current_favorites)
+            st.rerun()
+
+
 # Main app logic
 def main():
     # Add loading spinner for data loading
@@ -145,9 +288,20 @@ def main():
         df = load_and_process_data()
         df, all_countries, all_profiles, all_main_fields, all_sub_fields = prepare_filter_options(df)
 
+    # Load favorites data
+    favorites = load_favorites()
+
     # Sidebar for filters with improved UI
     with st.sidebar:
         st.header("🔍 Filters")
+
+        # Favorites filter option
+        show_favorites_only = st.checkbox("🌟 Show only favorite jobs", value=False)
+
+        if show_favorites_only and len(favorites) == 0:
+            st.warning("You haven't favorited any jobs yet")
+
+        st.divider()
 
         # Add search functionality for countries
         country_search = st.text_input("Search Countries", placeholder="Type to filter countries...")
@@ -170,6 +324,19 @@ def main():
         if st.button("Clear All Filters", type="secondary"):
             st.rerun()
 
+        st.divider()
+
+        # Favorites statistics
+        st.subheader("📚 Favorites Stats")
+        st.metric("Total Favorites", len(favorites))
+
+        if len(favorites) > 0:
+            # Clear all favorites button
+            if st.button("🗑️ Clear All Favorites", type="secondary"):
+                save_favorites(set())
+                st.success("All favorites cleared")
+                st.rerun()
+
     # Main content area
     st.title("🎓 Euraxess Job Listings")
 
@@ -186,52 +353,21 @@ def main():
         st.metric("New This Week", recent_jobs)
 
     # Filter data with caching
-    df_filtered = filter_dataframe(df, selected_countries, selected_profiles, selected_fields, selected_sub_fields)
+    df_filtered = filter_dataframe(df, selected_countries, selected_profiles, selected_fields, selected_sub_fields, show_favorites_only)
 
     # Display results
-    st.subheader(f"📊 Results ({len(df_filtered)} jobs)")
+    result_title = "🌟 Favorite Jobs" if show_favorites_only else "📊 All Jobs"
+    st.subheader(f"{result_title} ({len(df_filtered)} jobs)")
 
     if len(df_filtered) == 0:
-        st.warning("No jobs match your current filter criteria. Try adjusting your filters.")
+        if show_favorites_only:
+            st.info("No favorite jobs match the current filter criteria. Try adjusting your filters or favorite some jobs.")
+        else:
+            st.warning("No jobs match the current filter criteria. Please adjust your filters.")
         return
 
-    # Optimize columns display
-    show_columns = [
-        "country",
-        "university",
-        "title",
-        "link",
-        "application_deadline",
-        "posted_on",
-        "description",
-        "department",
-        "location",
-        "funding_program",
-        "type",
-        "profile",
-        "field_1",
-    ]
-
-    # Use column configuration for better performance
-    column_config = {
-        "country": st.column_config.TextColumn("Country", width="small"),
-        "title": st.column_config.TextColumn("Title"),
-        "university": st.column_config.TextColumn("University", width="medium"),
-        "link": st.column_config.LinkColumn("Link", display_text="View Job"),
-        "application_deadline": st.column_config.DateColumn("Deadline"),
-        "posted_on": st.column_config.DateColumn("Posted"),
-        "description": st.column_config.TextColumn("Description", width="medium"),
-    }
-
-    # Display dataframe with pagination-like behavior
-    st.dataframe(df_filtered[show_columns], use_container_width=True, height=500, column_config=column_config, hide_index=True)
-
-    # Add export functionality
-    # if st.button("📥 Export Filtered Results to CSV"):
-    #     csv = df_filtered.to_csv(index=False)
-    #     st.download_button(
-    #         label="Download CSV", data=csv, file_name=f"euraxess_filtered_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv", mime="text/csv"
-    #     )
+    # Display table with favorites functionality
+    display_job_table_with_favorites(df_filtered)
 
 
 if __name__ == "__main__":
