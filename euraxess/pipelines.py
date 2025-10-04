@@ -45,7 +45,7 @@ class EuraxessPipeline:
         if job_id in jobs_id:
             spider.logger.info(f"Job {job_id} already exists, skipping.")
             # Close the spider if the job already exists
-            spider.crawler.engine.close_spider(spider, "Job already exists")
+            # spider.crawler.engine.close_spider(spider, "Job already exists")
             return item
         self.writer.writerow(item)
         return item

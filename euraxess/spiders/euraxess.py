@@ -17,14 +17,6 @@ class EuraxessScraper(scrapy.Spider):
     current_page = 0
     today = datetime.datetime.now().strftime("%Y%m%d")
 
-    # Check if already exists
-    try:
-        df = pd.read_csv("output/jobs.csv")
-        df["posted_on"] = pd.to_datetime(df["posted_on"], errors="coerce")
-        last_date = df["posted_on"].max() - datetime.timedelta(days=1)
-    except FileNotFoundError:
-        last_date = None
-
     # This is custom FEEDS only for this spider
     custom_settings = {
         "DOWNLOAD_DELAY": 5,
@@ -71,10 +63,6 @@ class EuraxessScraper(scrapy.Spider):
                 "funding_program": job.xpath('.//div[contains(@class,"id-Funding-Programme")]//a/text()').get(),
                 "application_deadline": job.xpath('.//div[contains(@class,"id-Application-Deadline")]//time/text()').get(),
             }
-            posted_date = parser.parse(job_data["posted_on"], fuzzy=True)
-            if self.last_date and posted_date <= self.last_date:
-                self.logger.info(f"Job {job_data['id']} posted on {job_data['posted_on']} is older than the last date {self.last_date}. Return.")
-                return
 
             yield job_data
 
